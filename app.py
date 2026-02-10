@@ -202,13 +202,13 @@ if query:
                 st.markdown("**Most relevant passage from your document:**")
                 st.info(out.get("key_passage", "") or "(none)")
                 with st.expander("Full context sent to GPT-4o"):
-                    st.text_area("", value=out["answer"], height=200, disabled=True, key=f"ctx_{abs(hash(query)) % 10**8}")
+                    st.text_area("Full context", value=out["answer"], height=200, disabled=True, key=f"ctx_{abs(hash(query)) % 10**8}", label_visibility="collapsed")
             else:
                 st.subheader("Answer / Context sent to LLM")
                 st.markdown("**Most relevant passage (answer is in here):**")
                 st.info(out.get("key_passage", "") or "(none)")
                 st.caption("Full context sent to an LLM would be:")
-                st.text_area("", value=out["answer"], height=280, disabled=True, key=f"answer_{abs(hash(query)) % 10**8}")
+                st.text_area("Full context", value=out["answer"], height=280, disabled=True, key=f"answer_{abs(hash(query)) % 10**8}", label_visibility="collapsed")
                 st.caption("In a full RAG app, an LLM would generate a short answer from the context above.")
     except Exception as e:
         st.error(f"Retrieval failed. Upload a PDF, run all steps, and click **Store in ChromaDB** first. Error: {e}")
