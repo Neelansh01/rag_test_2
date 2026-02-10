@@ -10,7 +10,7 @@ from components.data_collection import load_pdf
 from components.cleaning import clean_text
 from components.chunking import chunk_text
 from components.embedding import embed_chunks
-from components.storage import store_embeddings
+from components.storage import store_embeddings, get_stored_content
 from components.retrieval import retrieve
 from components.generation import generate_answer
 
@@ -101,6 +101,22 @@ if pdf_file:
             stored_count = store_embeddings(embeddings)
         st.success(f"Stored **{stored_count}** chunks in the vector database.")
         st.session_state["stored"] = True
+
+# Show what's currently in ChromaDB (works on Cloud too – this is the only way to "see" stored content)
+st.divider()
+st.subheader("📂 What’s in the database?")
+st.caption("On Cloud, data lives only in the running app’s memory; you can’t open the folder. Use this section to see what’s currently stored.")
+if st.button("Refresh / View stored chunks", key="view_db"):
+    st.session_state["show_db"] = True
+if st.session_state.get("show_db"):
+    info = get_stored_content()
+    if info is None:
+        st.warning("No collection yet, or database not available. Upload a PDF and click **Store in ChromaDB** first.")
+    else:
+        st.metric("Chunks in ChromaDB", info["count"])
+        for c in info["chunks"]:
+            with st.expander(f"**{c['id']}**"):
+                st.text(c["text_preview"])
 
 st.divider()
 st.subheader("6️⃣ Retrieval & 7️⃣ Generation")

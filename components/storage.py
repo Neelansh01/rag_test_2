@@ -39,3 +39,28 @@ def store_embeddings(
 
     col.add(ids=ids, documents=documents, embeddings=vectors)
     return len(ids)
+
+
+def get_stored_content(
+    collection_name: str = COLLECTION_NAME,
+    persist_dir: str = CHROMA_DIR,
+    limit: int = 20,
+) -> dict | None:
+    """
+    Read what's currently in the collection (for UI). Returns None if collection
+    doesn't exist or is empty; otherwise dict with count and list of {id, text_preview}.
+    """
+    try:
+        client = get_client(persist_dir)
+        col = client.get_collection(collection_name)
+    except Exception:
+        return None
+    n = col.count()
+    if n == 0:
+        return {"count": 0, "chunks": []}
+    data = col.get(include=["documents"], limit=min(limit, n))
+    chunks = [
+        {"id": id_, "text_preview": (doc or "")[:300] + ("..." if len(doc or "") > 300 else "")}
+        for id_, doc in zip(data["ids"], data["documents"])
+    ]
+    return {"count": n, "chunks": chunks}

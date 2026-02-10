@@ -72,6 +72,7 @@ The first deploy can take a few minutes (it installs dependencies and downloads 
 ## Step 5: After deployment
 
 - Your app URL will be like: `https://YOUR_APP_NAME.streamlit.app`.
+- **Where is data stored on Cloud?** ChromaDB writes to a folder (e.g. `chroma_db`) **inside the app container**. You don’t get a path or file browser — the only way to see what’s stored is **inside the app**: use the **"What’s in the database?"** section (click **"Refresh / View stored chunks"**) to see how many chunks are stored and preview their text. Asking a question in **Retrieval** also shows the content of the retrieved chunks.
 - **Important**: On Streamlit Community Cloud the filesystem is **ephemeral**. The `chroma_db` folder and any uploaded PDFs are **not** kept when the app restarts or redeploys. So each time someone (or you) opens the app, they need to:
   1. Upload a PDF  
   2. Go through the pipeline (collection → cleaning → chunking → embedding)  
