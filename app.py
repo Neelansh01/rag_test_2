@@ -7,14 +7,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
-from config import CHUNK_SIZE, CHUNK_OVERLAP, DATA_DIR, UPLOAD_DIR
+from config import DATA_DIR, UPLOAD_DIR
 
 from components.data_collection import load_pdf
 from components.cleaning import clean_text
-from components.chunking import chunk_text
+from components.chunking import chunk_text_with_method, CHUNKING_METHODS
 from components.embedding import embed_chunks
 from components.storage import store_embeddings, get_stored_content
-from components.retrieval import retrieve
+from components.retrieval import retrieve_with_method, RETRIEVER_METHODS
 from components.generation import generate_answer
 from components.llm_azure import is_azure_configured, generate_with_azure
 
@@ -44,6 +44,26 @@ st.markdown("""
 | **6. Retrieval** | For a question, find the most similar chunks. |
 | **7. Generation** | (Optional) Use an LLM to answer from those chunks. |
 """)
+
+# --- RAG options (sidebar) ---
+with st.sidebar:
+    st.subheader("⚙️ RAG options")
+    st.caption("Chunking options apply when you upload a PDF (then click Store). Retriever & Top-K apply when you ask a question.")
+    chunking_method = st.selectbox(
+        "Chunking method",
+        options=list(CHUNKING_METHODS.keys()),
+        format_func=lambda k: CHUNKING_METHODS[k][0],
+        key="chunking_method",
+    )
+    chunk_size = st.select_slider("Chunk size (chars)", options=[300, 500, 700, 1000], value=500, key="chunk_size")
+    chunk_overlap = st.select_slider("Chunk overlap (chars)", options=[0, 50, 100], value=50, key="chunk_overlap")
+    retriever_method = st.selectbox(
+        "Retriever",
+        options=list(RETRIEVER_METHODS.keys()),
+        format_func=lambda k: RETRIEVER_METHODS[k][0],
+        key="retriever_method",
+    )
+    top_k = st.selectbox("Top-K chunks to retrieve", options=[1, 3, 5, 10], index=1, key="top_k")
 
 st.divider()
 
@@ -79,8 +99,8 @@ if pdf_file:
 
     st.divider()
     st.subheader("3️⃣ Chunking")
-    st.caption(f"Split into overlapping chunks (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP}).")
-    chunks = chunk_text(cleaned["text"])
+    st.caption(f"Method: **{CHUNKING_METHODS.get(chunking_method, ('fixed',))[0]}** — size={chunk_size}, overlap={chunk_overlap}.")
+    chunks = chunk_text_with_method(cleaned["text"], method=chunking_method, chunk_size=chunk_size, overlap=chunk_overlap)
     st.metric("Number of chunks", len(chunks))
     for i, c in enumerate(chunks[:5]):
         with st.expander(f"Chunk {c['index']} (preview)"):
@@ -151,13 +171,17 @@ query = st.text_input("Your question", placeholder="e.g. What is the main topic?
 if query:
     try:
         with st.spinner("Retrieving..."):
-            retrieved = retrieve(query)
+            retrieved = retrieve_with_method(query, method=retriever_method, top_k=top_k)
         if not retrieved:
             st.warning("No chunks in the database. Upload a PDF and click **Store in ChromaDB** first.")
         else:
             st.metric("Chunks retrieved", len(retrieved))
+            score_label = "keyword score" if retriever_method == "keyword" else "distance"
             for i, r in enumerate(retrieved):
-                with st.expander(f"Retrieved chunk {i+1} (distance: {r.get('distance', 'N/A')})"):
+                score_val = r.get("distance", "N/A")
+                if retriever_method == "keyword" and isinstance(score_val, (int, float)):
+                    score_val = -score_val
+                with st.expander(f"Retrieved chunk {i+1} ({score_label}: {score_val})"):
                     st.text(r["text"])
             with st.spinner("Building answer..."):
                 out = generate_answer(query, retrieved)

@@ -1,6 +1,7 @@
-"""Step 6: Retrieval - find the most relevant chunks for a query."""
+"""Step 6: Retrieval - find the most relevant chunks (semantic or keyword)."""
 from sentence_transformers import SentenceTransformer
 import chromadb
+import re
 from config import CHROMA_DIR, COLLECTION_NAME, TOP_K_RETRIEVAL, EMBEDDING_MODEL
 
 
@@ -12,7 +13,7 @@ def retrieve(
     model_name: str = EMBEDDING_MODEL,
 ) -> list[dict]:
     """
-    Embed the query, search ChromaDB, return list of dicts with 'text', 'metadata', 'distance'.
+    Semantic: embed the query, search ChromaDB by similarity. Return list of dicts with 'text', 'metadata', 'distance'.
     """
     client = chromadb.PersistentClient(path=persist_dir)
     col = client.get_collection(collection_name)
@@ -31,3 +32,57 @@ def retrieve(
                 "distance": results["distances"][0][i] if results.get("distances") else None,
             })
     return out
+
+
+def _tokenize(s: str) -> set:
+    """Lowercase words, strip punctuation."""
+    return set(re.findall(r"\b\w+\b", (s or "").lower()))
+
+
+def retrieve_keyword(
+    query: str,
+    top_k: int = TOP_K_RETRIEVAL,
+    collection_name: str = COLLECTION_NAME,
+    persist_dir: str = CHROMA_DIR,
+) -> list[dict]:
+    """
+    Keyword: fetch all chunks, score by query-word overlap (count of query words in chunk), return top_k.
+    Returns same shape as retrieve() with 'score' instead of 'distance' (higher = better).
+    """
+    client = chromadb.PersistentClient(path=persist_dir)
+    col = client.get_collection(collection_name)
+    data = col.get(include=["documents", "metadatas"])
+    if not data["ids"]:
+        return []
+    query_words = _tokenize(query)
+    scored = []
+    for i, doc_id in enumerate(data["ids"]):
+        doc = (data["documents"] or [""])[i] or ""
+        words = _tokenize(doc)
+        overlap = len(query_words & words)
+        scored.append({
+            "id": doc_id,
+            "text": doc,
+            "metadata": (data["metadatas"][i] or {}) if data.get("metadatas") else {},
+            "distance": -overlap,
+        })
+    scored.sort(key=lambda x: x["distance"])
+    return scored[:top_k]
+
+
+RETRIEVER_METHODS = {
+    "semantic": ("Semantic (SBERT)", retrieve),
+    "keyword": ("Keyword overlap", retrieve_keyword),
+}
+
+
+def retrieve_with_method(
+    query: str,
+    method: str = "semantic",
+    top_k: int = TOP_K_RETRIEVAL,
+    **kwargs,
+) -> list[dict]:
+    """Run the selected retriever. method: 'semantic' | 'keyword'."""
+    if method == "keyword":
+        return retrieve_keyword(query, top_k=top_k, **kwargs)
+    return retrieve(query, top_k=top_k, **kwargs)
