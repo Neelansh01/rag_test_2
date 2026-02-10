@@ -126,8 +126,18 @@ st.divider()
 st.subheader("6️⃣ Retrieval & 7️⃣ Generation")
 st.caption("Ask a question. We retrieve the most relevant chunks and show the context used for answering. (Upload a PDF and click **Store in ChromaDB** first if you haven’t.)")
 
-from config import AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT
-_use_azure = is_azure_configured(api_key=AZURE_OPENAI_API_KEY, endpoint=AZURE_OPENAI_ENDPOINT)
+from config import AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_VERSION
+# Prefer Streamlit Secrets (Cloud); fall back to env (local)
+try:
+    _s = st.secrets.get("azure_openai") or {}
+    _azure_key = _s.get("api_key") or AZURE_OPENAI_API_KEY
+    _azure_endpoint = _s.get("endpoint") or AZURE_OPENAI_ENDPOINT
+    _azure_deployment = _s.get("deployment") or AZURE_OPENAI_DEPLOYMENT
+    _azure_api_version = _s.get("api_version") or AZURE_OPENAI_API_VERSION
+except Exception:
+    _azure_key, _azure_endpoint = AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT
+    _azure_deployment, _azure_api_version = AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_API_VERSION
+_use_azure = is_azure_configured(api_key=_azure_key, endpoint=_azure_endpoint)
 
 answer_mode = st.radio(
     "Answer with",
@@ -157,7 +167,8 @@ if query:
                 with st.spinner("Calling GPT-4o..."):
                     direct_answer, err = generate_with_azure(
                         query, context,
-                        api_key=AZURE_OPENAI_API_KEY, endpoint=AZURE_OPENAI_ENDPOINT,
+                        api_key=_azure_key, endpoint=_azure_endpoint,
+                        deployment=_azure_deployment, api_version=_azure_api_version,
                     )
                 if err:
                     st.error(f"Azure OpenAI error: {err}")
