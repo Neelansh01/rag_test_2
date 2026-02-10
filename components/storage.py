@@ -1,5 +1,7 @@
 """Step 5: Storage - persist embeddings in local ChromaDB."""
 import chromadb
+from typing import Optional
+
 from config import CHROMA_DIR, COLLECTION_NAME
 
 
@@ -45,7 +47,7 @@ def get_stored_content(
     collection_name: str = COLLECTION_NAME,
     persist_dir: str = CHROMA_DIR,
     limit: int = 20,
-) -> dict | None:
+) -> Optional[dict]:
     """
     Read what's currently in the collection (for UI). Returns None if collection
     doesn't exist or is empty; otherwise dict with count and list of {id, text_preview}.
