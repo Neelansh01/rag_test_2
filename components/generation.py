@@ -9,6 +9,8 @@ def generate_answer(query: str, retrieved_chunks: list[dict]) -> dict:
     context and echo the query; no API key or model required.
     """
     context = "\n\n---\n\n".join(c["text"] for c in retrieved_chunks)
+    # First chunk is usually the most relevant (lowest distance) — show it as "key passage"
+    key_passage = (retrieved_chunks[0]["text"].strip() if retrieved_chunks else "")
     # Simple template response so the UI can show "what would be sent to an LLM"
     answer = (
         f"[Retrieved context used for answering]\n\n{context}\n\n"
@@ -19,4 +21,5 @@ def generate_answer(query: str, retrieved_chunks: list[dict]) -> dict:
         "answer": answer,
         "context_used": context,
         "num_chunks": len(retrieved_chunks),
+        "key_passage": key_passage,
     }

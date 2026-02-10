@@ -3,6 +3,9 @@ RAG Demo App – Single PDF, step-by-step visibility on UI.
 Run from project root: streamlit run app.py
 """
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from config import CHUNK_SIZE, CHUNK_OVERLAP, DATA_DIR, UPLOAD_DIR
 
@@ -13,6 +16,7 @@ from components.embedding import embed_chunks
 from components.storage import store_embeddings, get_stored_content
 from components.retrieval import retrieve
 from components.generation import generate_answer
+from components.llm_azure import is_azure_configured, generate_with_azure
 
 # Ensure dirs exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -121,6 +125,18 @@ if st.session_state.get("show_db"):
 st.divider()
 st.subheader("6️⃣ Retrieval & 7️⃣ Generation")
 st.caption("Ask a question. We retrieve the most relevant chunks and show the context used for answering. (Upload a PDF and click **Store in ChromaDB** first if you haven’t.)")
+
+from config import AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT
+_use_azure = is_azure_configured(api_key=AZURE_OPENAI_API_KEY, endpoint=AZURE_OPENAI_ENDPOINT)
+
+answer_mode = st.radio(
+    "Answer with",
+    options=["Context only (no LLM)", "GPT-4o (Azure) – direct answer"] if _use_azure else ["Context only (no LLM)"],
+    key="answer_mode",
+    horizontal=True,
+)
+use_gpt4o = _use_azure and "GPT-4o" in answer_mode
+
 query = st.text_input("Your question", placeholder="e.g. What is the main topic?", key="query")
 if query:
     try:
@@ -135,9 +151,30 @@ if query:
                     st.text(r["text"])
             with st.spinner("Building answer..."):
                 out = generate_answer(query, retrieved)
-            st.subheader("Answer / Context sent to LLM")
-            st.text_area("", value=out["answer"], height=300, disabled=True, key="answer")
-            st.caption("In a full RAG app, an LLM would generate a natural answer from the context above.")
+            context = out["context_used"]
+
+            if use_gpt4o:
+                with st.spinner("Calling GPT-4o..."):
+                    direct_answer, err = generate_with_azure(
+                        query, context,
+                        api_key=AZURE_OPENAI_API_KEY, endpoint=AZURE_OPENAI_ENDPOINT,
+                    )
+                if err:
+                    st.error(f"Azure OpenAI error: {err}")
+                else:
+                    st.subheader("Answer (GPT-4o)")
+                    st.success(direct_answer)
+                st.markdown("**Most relevant passage from your document:**")
+                st.info(out.get("key_passage", "") or "(none)")
+                with st.expander("Full context sent to GPT-4o"):
+                    st.text_area("", value=out["answer"], height=200, disabled=True, key=f"ctx_{abs(hash(query)) % 10**8}")
+            else:
+                st.subheader("Answer / Context sent to LLM")
+                st.markdown("**Most relevant passage (answer is in here):**")
+                st.info(out.get("key_passage", "") or "(none)")
+                st.caption("Full context sent to an LLM would be:")
+                st.text_area("", value=out["answer"], height=280, disabled=True, key=f"answer_{abs(hash(query)) % 10**8}")
+                st.caption("In a full RAG app, an LLM would generate a short answer from the context above.")
     except Exception as e:
         st.error(f"Retrieval failed. Upload a PDF, run all steps, and click **Store in ChromaDB** first. Error: {e}")
 
